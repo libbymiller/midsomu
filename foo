@@ -1,0 +1,24 @@
+
+  <div id="admin" style="display:none">
+    <h4>Admin Options</h4>
+    <p>Add an option</p>
+    <p>Use name,image</p>
+    <form>
+      <input type="text" name="opt" value=""/>
+      <button onclick="javascript:addOption();return false">add</button>
+    </form>
+
+    <p>Remove an option</p>
+    <p>Use the exact name</p>
+    <form>
+      <input type="text" name="opt" value=""/>
+      <button onclick="javascript:removeOption();return false">remove</button>
+    </form>
+
+    <p>Add hashtag</p>
+    <p>e.g. #MidSoMu</p>
+    <form>
+      <input type="text" name="opt" value=""/>
+      <button onclick="javascript:setHashTag();return false">add</button>
+    </form>
+   </div>

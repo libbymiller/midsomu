@@ -1,0 +1,415 @@
+<!DOCTYPE html> 
+<html><head> 
+ <script type='text/javascript'  src='strophe.js'></script>
+
+<title>MM</title>
+<script src="http://platform.twitter.com/anywhere.js?id=nVp8pLJ1gnhXQb0aSlc1zA&v=1" type="text/javascript"></script>
+<script type="text/javascript" src='jquery.js'></script>
+
+<script type="text/javascript">
+
+var jid;
+var jid_part="@jabber.notu.be";
+var hashtag="#MidSoMu";
+var myT;
+
+
+//@anywhere functions
+  twttr.anywhere(function (T) {
+
+      if (T.isConnected()){
+          myT=T;
+          do_tweet_box(T,hashtag);
+          add_username_to_page(T.currentUser.screenName);
+          //add_timeline(T)
+          $('div#tweets').empty();
+          if(hashtag && hashtag!=""){
+            T.currentUser.homeTimeline().first(20).filter(filterer).each(function(status) {
+              $('div#tweets').append('<p>' + status.user.screenName + ': ' + status.text + '</p>');
+            });
+          }else{
+            T.currentUser.homeTimeline().first(20).each(function(status) {
+              $('div#tweets').append('<p>' + status.user.screenName + ': ' + status.text + '</p>');
+            });
+          }
+          
+          out("One moment please while we connect to the XMPP network...");
+          $("#logout").show();
+          $.post("page", { username: T.currentUser.screenName, cookie: readCookie("twitter_anywhere_identity") },
+          function(data){
+            var u = data;
+            if(data.match("@")){
+              var arr = data.split('@');
+              u = arr[0];
+            }
+            jid = u+jid_part;
+            connection.connect( jid,u,linked);
+          }, "text");
+       }else{
+          out("Connect using Twitter clicking by on the button below");
+       }
+
+    T("#login").connectButton({
+      authComplete: function(user) {
+          out("One moment please while we connect to the XMPP network...");
+          
+        // triggered when auth completed successfully
+          $("#logout").show();
+          $.post("page", { username: T.currentUser.screenName, cookie: readCookie("twitter_anywhere_identity") },
+          function(data){
+            var u = data;
+            if(data.match("@")){
+              var arr = data.split('@');
+              u = arr[0];
+            }
+            jid = u+jid_part;
+            connection.connect( jid,u,linked);
+          }, "text");
+
+      },
+      signOut: function() {
+        // triggered when user logs out
+        //remove logout button
+          connection.disconnect();
+          $("#logout").hide();
+          counts(null);
+          options(null);
+
+      }
+    });
+  });
+
+
+function add_username_to_page(un){
+  var out = document.getElementById('un');
+  out.innerHTML = "Signed into Twitter as "+un;
+}
+
+function filterer(status){
+  return status.text.match(hashtag);
+}
+
+function do_tweet_box(T,hashtag){
+
+    T("#tbox").tweetBox({
+      height: 100,
+      width: 200,
+      defaultContent: hashtag
+    });
+}
+
+function update_timeline(){
+      if(myT){
+          $('div#tweets').empty();
+          T = myT;
+          if(hashtag && hashtag!=""){
+            T.currentUser.homeTimeline().filter(filterer).each(function(status) {
+              $('div#tweets').append('<p>' + status.user.screenName + ': ' + status.text + '</p>');
+            });
+          }else{
+            T.currentUser.homeTimeline().first(20).each(function(status) {
+              $('div#tweets').append('<p>' + status.user.screenName + ': ' + status.text + '</p>');
+            });
+          }
+      }
+}
+
+
+//strophe stuff
+
+var st = 6;
+URL = 'http://jabber.notu.be/http-bind/'
+var connection = new Strophe.Connection(URL);
+
+//debugging
+
+//connection.rawInput = function (data) { console.log(data)};
+//connection.rawOutput = function (data) { console.log(data) };
+//Strophe.log = function (lvl, msg) { console.log(msg)};
+
+
+var far = "collector@jabber.notu.be"
+
+var statusCodes=["ERROR","CONNECTING","CONNFAIL","AUTHENTICATING","AUTHFAIL","CONNECTED","DISCONNECTED","DISCONNECTING"];
+
+function linked(status) {
+    st = status;
+    out("connection status: "+statusCodes[status] );
+    if (status == Strophe.Status.CONNECTED) { 
+      out("connected");
+      var pres = $pres({type:'available',to: far,from: jid,priority: 10});
+      connection.send(pres);    
+      sendChatCommand("{'message':'do_hello'}");
+    } 
+    setTimeout ( "doRefresh()", 30000 );
+
+    $("#admin").show();
+    $("#tbox").show();
+    $("#tweets").show();
+}
+
+
+//for periodically updating the vote counts
+function doRefresh(){
+  sendChatCommand("{'command': 'do_refresh'}")
+}
+
+
+//send a command
+function sendChatCommand(text) {
+    if (st == Strophe.Status.CONNECTED) { 
+//    var pres = $pres({type:'available',to: far,from: jid});
+//    connection.send(pres);    
+
+    var stanza = new Strophe.Builder( "message", {"to": far, "from": jid,
+         "type": "chat"} ).c("body").t(text);
+
+    connection.send(stanza);
+    } 
+    out("sent command: "+text);
+}
+
+//not currently used
+function sendIQCommand(text,id) {
+    if (st == Strophe.Status.CONNECTED) { 
+      out("sent iq command: "+text);
+
+      var stanza = $iq({type: 'get',
+        to: far, from: jid, id: connection.getUniqueId()}).c('query',
+          {xmlns: 'http://buttons.foaf.tv/',id: id}).t(text);
+
+      connection.send(stanza.tree());
+    } 
+}
+
+
+
+///for iqs - not currenly used
+function on_buttons(msg) { 
+    var q  = msg.firstChild;  
+    var id = q.getAttribute('id');
+    var command = q.childNodes[0].nodeValue;
+    out(command + " "+id);
+    return true; 
+}
+
+
+
+//process messages
+function on_message(msg) { 
+    var event = Strophe.getText(msg.firstChild);
+    if (event.match( new RegExp( /options/) )) {  
+        var j = eval("z="+event);
+        options(j.options);
+    }
+
+    if (event.match( new RegExp( /counts/) )) {  
+        var j = eval("z="+event);
+        counts(j.counts,j.images);
+        update_timeline();
+    }
+
+    out("Got message")
+    return true; 
+}
+
+
+//dosn't seem to work at the moment
+function on_presence(presence) {
+    alert(presence);
+    var status_type = $(presence).attr('type'); 
+    var fr = $(presence).attr('from');
+    var me = $(presence).attr('to');
+    var status = $(presence).find("status").text(); 
+
+    if (status_type && status_type.match( new RegExp( /subscribe/) )) {  
+      //send yes
+      var pres = $pres({type:'subscribed',to: fr,from: me});
+      //alert(pres.toString());
+      connection.send(pres);    
+    }
+
+//    if(status){
+  //     alert("hello");
+    //}
+
+    if (status && status.match( new RegExp( /counts/) )) {  
+        var j = eval("z="+status);
+        counts(j.counts,j.images);
+        out("Updating counts "+j.counts);
+    }
+  return true;
+} 
+
+
+
+//output status
+function out(msg) {
+  var out = document.getElementById('out');
+  out.innerHTML = msg;
+}
+
+//display options
+//not used any more; use counts instead
+function options(arr) {
+  var x ="";
+  var out = document.getElementById('options');
+  if(arr){
+    var x = "<h4>Voting Options</h4><p>Pick whodunnit!</p><ul>";
+    for(a in arr){
+      x = x+"<li><a href=\"#\" onclick=\"javascript:vote('"+arr[a]+"')\">"+arr[a]+"</a></li>";
+    }
+    x = x+"</ul><hr />";
+  }
+  out.innerHTML = x;
+}
+
+
+//display options and counts and allow people to increment them
+function counts(hash,hash2) {
+
+  var out = document.getElementById('counts');
+  var x ="";
+  if(hash){
+    x = "<h4>Whodunnit: Total Votes</h4>";
+    if(!hash2){
+      x = x+"<ul>";
+    }
+    for(var a in hash){
+      if(hash2){
+        var iii = hash2[a];
+        if(!hash2[a]){
+          var iii = "http://dev.notu.be/2010/10/mm/images/unknown_man_1.gif";
+        }
+      x = x+"<a href=\"#\" onclick=\"javascript:vote('"+a+"')\"><img width=\"100\" src=\""+iii+"\"/></a> "+a+"("+hash[a]+")<br />";
+      }else{
+      x = x+"<li><a href=\"#\" onclick=\"javascript:vote('"+a+"')\">"+a+"</a> ("+hash[a]+")</li>";
+      }
+    }
+    if(!hash2){
+      x = x+"</ul>";
+    }
+  }
+  out.innerHTML = x;
+}
+
+
+//vote for an option
+function vote(thing){
+     sendChatCommand( "{\"do_vote\":\""+thing+"\"}")
+}
+
+//sets the hashtag (via the collector) for everyone: used by admin
+function setHashTag(){
+      oForm = document.forms[2];
+      oText = oForm.elements["opt"];
+      hashtag = oText.value; 
+      sendChatCommand( "{\"do_set_hashtag\":\""+hashtag+"\"}")
+}
+
+//add an option for everyone: used by admin
+function addOption(){
+      oForm = document.forms[0];
+      oText = oForm.elements["opt"];
+      json_str = oText.value; 
+      var a = json_str.split(",");
+      if(a[0] && a[0]!=""){
+        if(a[1] && a[1]!=""){
+          sendChatCommand( "{\"do_add_option\":{\"name\":\""+a[0]+"\",\"image\":\""+a[1]+"\"}}");
+        }else{
+          sendChatCommand( "{\"do_add_option\":{\"name\":\""+a[0]+"\"}}");
+        }
+      }
+}
+
+//remove an opton for everyone - used by admin
+function removeOption(){
+      oForm = document.forms[1];
+      oText = oForm.elements["opt"];
+      uri = oText.value; 
+      sendChatCommand( "{\"do_remove_option\":\""+uri+"\"}");
+}
+
+
+
+//read a cookie ready for sending it to the backend
+function readCookie(name) {
+	var nameEQ = name + "=";
+	var ca = document.cookie.split(';');
+	for(var i=0;i < ca.length;i++) {
+		var c = ca[i];
+		while (c.charAt(0)==' ') c = c.substring(1,c.length);
+		if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+	}
+	return null;
+}
+
+
+
+//connection.addHandler(on_buttons, "http://buttons.foaf.tv/", "iq", "get");
+
+connection.addHandler(     on_message,     null,     "message",    "chat");
+connection.addHandler(on_presence, null, "presence")
+
+</script>
+
+
+<!--
+        ERROR: 0,
+        CONNECTING: 1,
+        CONNFAIL: 2,
+        AUTHENTICATING: 3,
+        AUTHFAIL: 4,
+        CONNECTED: 5,
+        DISCONNECTED: 6,
+        DISCONNECTING: 7
+-->
+
+
+<span id="out">
+Checking Twitter connection status
+</span>
+
+
+<hr />
+
+
+
+
+<body>
+
+<h2><span id="un"></span></h2>
+<div id="top_bar"> 
+  <div id="session_buttons"> 
+    <div id="current_user"></div> 
+    <div id="login"></div> 
+    <div id="logout" style="display: none">
+      <a href='#' onclick='twttr.anywhere.signOut();'>Sign out of twitter</a>
+    </div>
+
+  </div> 
+</div> 
+
+<table>
+<tr>
+<td width="33%" valign="top">
+<span id="counts"></span>
+<span id="options"></span>
+</td>
+
+<td width="33%" valign="top">
+  <div id="tbox"  style="display:none"></div>
+  <div id="admin" style="display:none">
+   </div>
+</td>
+
+<td width="33%"  valign="top">
+  <div id="tweets"  style="display:none">
+
+  </div>
+</td>
+</tr>
+</table>
+</body>
+</html>
+
