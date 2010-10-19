@@ -8,25 +8,21 @@ The flow is something like this:
 * Person goes to MidSoMu site, logs in using twitter and connects 
 MidSoMu to a twitter account using oauth
 
-* Once the connection is made, the page makes a POST to the CreateJID.rb 
-servlet, which when run in a servlet runner, talks to ejabberd, creates 
-a new Jabber account based on the twitter id or ascertains that one 
-already exists. If new, it sends a request to the collector to be its friend
+* Once the twitter connection is made, strophe generates an anonymous 
+jabber login, and sends a request to the collector to be its friend
 
 * The 'collector' is a ruby programme that aggregates votes and sends 
 them back to the other participants. It accepts friend requests and 
 responds to chat queries (it has been previously registered with ejabberd)
 
-* The servlet disconnects and strophe connects from the client side 
-using the same credentials, tries to send a presence message and a hello 
-message to the collector
+* strophe connects from the client side, sends anonymous presence and a 
+hello message to the collector
 
 * The collector responds with a set of options and the current votes for 
 them (the options are just hashes of name, image, votenumber)
 
-* The page periodically sends requests:
-** for updated information
-** to the @anywhere twitter api to update the list of friends' tweets
+* When the collector gets updates it updates and resends its presence 
+(so any change in vote is told to everyone)
 
 * An administrator page is identical except it allows you to add and 
 remove voting options and hashtag
@@ -45,14 +41,8 @@ be used for, but perhaps we together we can can make something?
 
 Problems:
 
-* The main one is that I can't get a reciprocal relationship functioning 
-between strophe and the newly minted account. This seems to mean that 
-sending presence doesn't work, and so I've had to use chat messages 
-instead, so we have pull instead of push for updates, which seems wrong. 
-This appears to be the result of creating the user and then logging in 
-with it from the clientside. With no clientside input it works.
-
-* The other problem is that @anywhere twitter api output doesn't seem 
-to show up in anything but Safari.
+* The main problem now is that @anywhere twitter api output doesn't seem 
+to show up in anything but Safari. Plus it's not clear when to update 
+the timeline
 
 * The collector doesn't currently save its state

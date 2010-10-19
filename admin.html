@@ -8,8 +8,7 @@
 
 <script type="text/javascript">
 
-var jid;
-var jid_part="@jabber.notu.be";
+var server = "jabber.notu.be";
 var hashtag="#MidSoMu";
 var myT;
 
@@ -35,16 +34,7 @@ var myT;
           
           out("One moment please while we connect to the XMPP network...");
           $("#logout").show();
-          $.post("page", { username: T.currentUser.screenName, cookie: readCookie("twitter_anywhere_identity") },
-          function(data){
-            var u = data;
-            if(data.match("@")){
-              var arr = data.split('@');
-              u = arr[0];
-            }
-            jid = u+jid_part;
-            connection.connect( jid,u,linked);
-          }, "text");
+          connection.connect( server,"",linked);
        }else{
           out("Connect using Twitter clicking by on the button below");
        }
@@ -55,16 +45,7 @@ var myT;
           
         // triggered when auth completed successfully
           $("#logout").show();
-          $.post("page", { username: T.currentUser.screenName, cookie: readCookie("twitter_anywhere_identity") },
-          function(data){
-            var u = data;
-            if(data.match("@")){
-              var arr = data.split('@');
-              u = arr[0];
-            }
-            jid = u+jid_part;
-            connection.connect( jid,u,linked);
-          }, "text");
+          connection.connect( server,"",linked);
 
       },
       signOut: function() {
@@ -128,46 +109,44 @@ var connection = new Strophe.Connection(URL);
 //Strophe.log = function (lvl, msg) { console.log(msg)};
 
 
-var far = "collector@jabber.notu.be"
+var far = "collector6@"+server
 
 var statusCodes=["ERROR","CONNECTING","CONNFAIL","AUTHENTICATING","AUTHFAIL","CONNECTED","DISCONNECTED","DISCONNECTING"];
 
+
+//called when the xmpp link is made
 function linked(status) {
     st = status;
     out("connection status: "+statusCodes[status] );
-    if (status == Strophe.Status.CONNECTED) { 
+    if (status == Strophe.Status.CONNECTED) {
       out("connected");
-      var pres = $pres({type:'available',to: far,from: jid,priority: 10});
-      connection.send(pres);    
-      sendChatCommand("{'message':'do_hello'}");
-    } 
-    setTimeout ( "doRefresh()", 30000 );
+      var pres = $pres({type:'available',priority: 10});
+      connection.send(pres);
+
+      //now try and add a user
+      var pres2 = $pres({type:'subscribe',to: far});
+      connection.send(pres2);
+      sendChatCommand("{'message':'do_hello'}");//gets our initial state
+    }     
 
     $("#admin").show();
-    $("#tbox").show();
+    $("#tbox").show();   
     $("#tweets").show();
 }
+    
 
 
-//for periodically updating the vote counts
-function doRefresh(){
-  sendChatCommand("{'command': 'do_refresh'}")
-}
 
-
-//send a command
+//send a command via chat
 function sendChatCommand(text) {
-    if (st == Strophe.Status.CONNECTED) { 
-//    var pres = $pres({type:'available',to: far,from: jid});
-//    connection.send(pres);    
-
-    var stanza = new Strophe.Builder( "message", {"to": far, "from": jid,
+    if (st == Strophe.Status.CONNECTED) {
+      var stanza = new Strophe.Builder( "message", {"to": far,
          "type": "chat"} ).c("body").t(text);
-
-    connection.send(stanza);
-    } 
+      connection.send(stanza);
+    }     
     out("sent command: "+text);
 }
+
 
 //not currently used
 function sendIQCommand(text,id) {
@@ -195,7 +174,7 @@ function on_buttons(msg) {
 
 
 
-//process messages
+//process messages: this shoud only happen when we have first registered
 function on_message(msg) { 
     var event = Strophe.getText(msg.firstChild);
     if (event.match( new RegExp( /options/) )) {  
@@ -214,9 +193,8 @@ function on_message(msg) {
 }
 
 
-//dosn't seem to work at the moment
+//this is the means y which we goet most of our information
 function on_presence(presence) {
-    alert(presence);
     var status_type = $(presence).attr('type'); 
     var fr = $(presence).attr('from');
     var me = $(presence).attr('to');
@@ -229,10 +207,6 @@ function on_presence(presence) {
       connection.send(pres);    
     }
 
-//    if(status){
-  //     alert("hello");
-    //}
-
     if (status && status.match( new RegExp( /counts/) )) {  
         var j = eval("z="+status);
         counts(j.counts,j.images);
@@ -243,7 +217,7 @@ function on_presence(presence) {
 
 
 
-//output status
+//output logging
 function out(msg) {
   var out = document.getElementById('out');
   out.innerHTML = msg;
@@ -384,6 +358,7 @@ Checking Twitter connection status
     <div id="current_user"></div> 
     <div id="login"></div> 
     <div id="logout" style="display: none">
+
       <a href='#' onclick='twttr.anywhere.signOut();'>Sign out of twitter</a>
     </div>
 
@@ -398,9 +373,10 @@ Checking Twitter connection status
 </td>
 
 <td width="33%" valign="top">
-  <div id="tbox"  style="display:none"></div>
 
+  <div id="tbox"  style="display:none"></div>
   <div id="admin" style="display:none">
+<!--
     <h4>Admin Options</h4>
     <p>Add an option</p>
     <p>Use name,image</p>
@@ -422,6 +398,7 @@ Checking Twitter connection status
       <input type="text" name="opt" value=""/>
       <button onclick="javascript:setHashTag();return false">add</button>
     </form>
+-->
 
    </div>
 </td>
@@ -433,6 +410,9 @@ Checking Twitter connection status
 </td>
 </tr>
 </table>
+
 </body>
 </html>
+
+
 
